@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+tensorflow  # atau scikit-learn, tergantung model yang digunakan
+pillow  # untuk memproses gambar
+numpy
+python-multipart
