@@ -1,18 +1,20 @@
-# Gunakan image Python resmi sebagai base image
+# Use the official Python image from Docker Hub
 FROM python:3.9-slim
 
-# Set working directory dalam container
+# Set the working directory inside the container
 WORKDIR /app
 
-# Copy dependencies dan aplikasi ke dalam container
-COPY requirements.txt /app/
-COPY . /app/
+# Copy the requirements.txt file to the container
+COPY requirements.txt .
 
 # Install dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port yang digunakan oleh FastAPI
+# Copy the application code to the container
+COPY . .
+
+# Expose the port that FastAPI will run on
 EXPOSE 8080
 
-# Perintah untuk menjalankan aplikasi FastAPI menggunakan Uvicorn
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
+# Command to run the app using Uvicorn (FastAPI ASGI server)
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

@@ -1,42 +1,72 @@
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.responses import JSONResponse
-from PIL import Image
 import numpy as np
-import tensorflow as tf
+from fastapi import FastAPI, UploadFile, File
+from tensorflow.keras.models import load_model
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from io import BytesIO
-from app.utils import load_model, preprocess_image
+from PIL import Image
 
+# Load the individual models
+model_fruit = load_model("models/fruit_classification_model_5buah.h5")
+model_apple = load_model("models/Apple_ripeness_model.h5")
+model_durian = load_model("models/Durian_ripeness_model.h5")
+model_grape = load_model("models/Grape_ripeness_model.h5")
+model_strawberry = load_model("models/Strawberry_ripeness_model.h5")
+model_dragonfruit = load_model("models/DragonFruit_ripeness_model.h5")
+
+# Initialize FastAPI app
 app = FastAPI()
 
-model = load_model()
+# Fruit class mapping
+fruit_classes = ["apple", "durian", "grape", "strawberry", "dragonfruit"]
 
-fruit_classes = ['apple', 'durian', 'grape', 'strawberry', 'dragon fruit']
+# Function to load and preprocess image
+def load_and_preprocess_image(image: BytesIO, target_size=(128, 128)):
+    img = Image.open(image)
+    img = img.resize(target_size)
+    img_array = img_to_array(img)  # Convert image to numpy array
+    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+    img_array = img_array / 255.0  # Normalize image to [0, 1]
+    return img_array
 
+# Function to predict ripeness for specific fruits
+def predict_ripeness(fruit_label, input_image):
+    if fruit_label == "apple":
+        model = model_apple
+    elif fruit_label == "durian":
+        model = model_durian
+    elif fruit_label == "grape":
+        model = model_grape
+    elif fruit_label == "strawberry":
+        model = model_strawberry
+    elif fruit_label == "dragonfruit":
+        model = model_dragonfruit
+    else:
+        return "Unsupported fruit"
+
+    prediction = model.predict(input_image)
+    predicted_label = (prediction > 0.5).astype(int)
+    return "Ripe" if predicted_label == 1 else "Unripe"
+
+# API endpoint to upload and predict
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
-    try:
-        if not file.content_type.startswith('image/'):
-            raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
+    # Read image file
+    image = await file.read()
+    image = BytesIO(image)
 
-        image_bytes = await file.read()
-        img = Image.open(BytesIO(image_bytes))
+    # Load and preprocess the image
+    input_image = load_and_preprocess_image(image)
 
-        processed_image = preprocess_image(img)
+    # Fruit classification model prediction
+    predictions = model_fruit.predict(input_image)
+    predicted_labels = np.argmax(predictions, axis=1)
+    fruit_label = fruit_classes[predicted_labels[0]]
 
-        prediction = model.predict(processed_image)
-        predicted_class_idx = np.argmax(prediction, axis=1)[0]
-        predicted_class = fruit_classes[predicted_class_idx]
+    # Predict ripeness based on the fruit type
+    ripeness = predict_ripeness(fruit_label, input_image)
 
-        ripeness_score = prediction[0][predicted_class_idx]  
-        ripeness_status = "Ripe" if ripeness_score > 0.5 else "Unripe"
-
-        return JSONResponse(content={
-            "Nama Buah": predicted_class,
-            "Rippenes": ripeness_status,
-            "Persentase Rippenes": float(ripeness_score) * 100  
-        })
-
-    except HTTPException as http_err:
-        raise http_err  
-    except Exception as e:
-        return JSONResponse(status_code=500, content={"message": f"Internal Server Error: {str(e)}"})
+    # Return results
+    return {
+        "predicted_fruit": fruit_label,
+        "ripeness": ripeness
+    }
